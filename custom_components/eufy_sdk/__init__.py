@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
 from homeassistant.core import callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_call_later
 from homeassistant.loader import async_get_loaded_integration
@@ -23,9 +24,11 @@ from .alarm_sync import (
     end_cancelled_delay,
 )
 from .api import EufySdkApiClient
+from .bridge_access import valid_bridge_token
 from .arming_sync import apply_arming_mode_event
 from .const import (
     ALARM_AUTO_CLEAR_SECONDS,
+    CONF_BRIDGE_TOKEN,
     CONF_HOST,
     CONF_POLL_INTERVAL,
     CONF_PORT,
@@ -129,6 +132,8 @@ def _apply_property_changed(
 
 async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> bool:
     """Set up eufy_sdk from a config entry."""
+    if not valid_bridge_token(entry.data.get(CONF_BRIDGE_TOKEN)):
+        raise ConfigEntryAuthFailed("bridge access token configuration is required")
     poll_min = entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL_MIN)
     coordinator = EufySdkDataUpdateCoordinator(
         hass=hass,
@@ -197,6 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> b
         host=entry.data[CONF_HOST],
         port=entry.data[CONF_PORT],
         session=async_get_clientsession(hass),
+        bridge_token=entry.data[CONF_BRIDGE_TOKEN],
         on_event=_on_event,
         on_reconnect=_refresh_now,
     )
