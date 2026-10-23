@@ -5,7 +5,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import custom_components.eufy_sdk as integration
-from custom_components.eufy_sdk.const import CONF_HOST, CONF_PORT
+from custom_components.eufy_sdk.const import CONF_BRIDGE_TOKEN, CONF_HOST, CONF_PORT
 
 
 class SetupEventTests(unittest.IsolatedAsyncioTestCase):
@@ -15,7 +15,7 @@ class SetupEventTests(unittest.IsolatedAsyncioTestCase):
         hass.config_entries.async_forward_entry_setups = AsyncMock()
 
         entry = Mock()
-        entry.data = {CONF_HOST: "bridge", CONF_PORT: 3000}
+        entry.data = {CONF_HOST: "bridge", CONF_PORT: 3000, CONF_BRIDGE_TOKEN: "0" * 64}
         entry.options = {}
         entry.domain = "eufy_sdk"
         entry.entry_id = "test-entry"
@@ -67,7 +67,7 @@ class SetupEventTests(unittest.IsolatedAsyncioTestCase):
         hass.bus.async_fire = Mock()
         hass.config_entries.async_forward_entry_setups = AsyncMock()
         entry = Mock()
-        entry.data = {CONF_HOST: "bridge", CONF_PORT: 3000}
+        entry.data = {CONF_HOST: "bridge", CONF_PORT: 3000, CONF_BRIDGE_TOKEN: "0" * 64}
         entry.options = {}
         entry.domain = "eufy_sdk"
         entry.entry_id = "test-entry"
