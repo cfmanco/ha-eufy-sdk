@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -18,9 +16,13 @@ from .const import (
     DEFAULT_GO2RTC_RTSP_PORT,
     DOMAIN,
 )
+from .api import (
+    EufySdkApiClientBridgeAccessError,
+    EufySdkApiClientCommunicationError,
+)
 from .entity import device_offline
 from .preload import async_check_preload, on_battery_power
-from .snapshot_policy import snapshot_url
+from .snapshot_policy import snapshot_path
 
 if TYPE_CHECKING:
     from homeassistant.components.stream import Stream
@@ -54,7 +56,8 @@ class EufySdkCamera(CoordinatorEntity["EufySdkDataUpdateCoordinator"], Camera):
     _attr_has_entity_name = True
     _attr_name = None  # the device name is the camera name
     _attr_attribution = ATTRIBUTION
-    _attr_supported_features = CameraEntityFeature.STREAM
+    # Direct RTSP has no secure cross-host transport on this branch.
+    _attr_supported_features = CameraEntityFeature(0)
 
     def __init__(
         self,
@@ -97,41 +100,26 @@ class EufySdkCamera(CoordinatorEntity["EufySdkDataUpdateCoordinator"], Camera):
             and not device_offline(self.coordinator.data.get(self._sn))
         )
 
-    async def stream_source(self) -> str:
-        """Return the go2rtc RTSP URL — HA's stream component + go2rtc do the work."""
-        return f"rtsp://{self._host}:{self._rtsp_port}/{self._sn}"
+    async def stream_source(self) -> str | None:
+        """Refuse a direct RTSP URL until the authenticated media gateway exists."""
+        return None
 
     async def async_create_stream(self) -> Stream | None:
-        """
-        Skip Home Assistant's stream worker for a battery camera.
-
-        That worker retries a failed or closed source forever, and every retry makes
-        the bridge wake the camera over P2P. A battery camera was drained flat that way
-        after one live view (ha-eufy-sdk#83). Live view then runs through Home
-        Assistant's go2rtc (WebRTC) on the same RTSP restream, so there is no HLS
-        fallback and no camera.record for battery cameras.
-        """
-        if on_battery_power(self.coordinator.data.get(self._sn)):
-            return None
-        return await super().async_create_stream()
+        """Do not start Home Assistant video workers over unauthenticated RTSP."""
+        return None
 
     async def async_camera_image(
         self,
         width: int | None = None,  # noqa: ARG002
         height: int | None = None,  # noqa: ARG002
     ) -> bytes | None:
-        """Return a still from the bridge's /snapshot endpoint."""
-        session = async_get_clientsession(self.hass)
-        url = snapshot_url(
-            self._host,
-            self._port,
-            self._sn,
-            self.coordinator.config_entry.runtime_data.snapshot_policy.get(self._sn),
-        )
+        """Read a still via the shared HTTPS media client with its bearer header."""
+        runtime = self.coordinator.config_entry.runtime_data
+        path = snapshot_path(self._sn, runtime.snapshot_policy.get(self._sn))
         try:
-            async with session.get(url, timeout=20) as resp:
-                if resp.status == HTTPStatus.OK:
-                    return await resp.read()
-        except (TimeoutError, OSError):
+            return await runtime.client.media_get(path, timeout=20)
+        except EufySdkApiClientBridgeAccessError:
+            # A rejected token requires a new credential, not an anonymous retry.
+            raise
+        except EufySdkApiClientCommunicationError:
             return None
-        return None
