@@ -42,7 +42,7 @@ RPC_DEADLINE = 15
 
 class MetadataTimeoutTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.client = EufySdkApiClient("example.invalid", 3000, Mock())
+        self.client = EufySdkApiClient("example.invalid", 3000, Mock(), bridge_token="0" * 64)
         self.ws = Mock(closed=False)
         self.ws.send_json = AsyncMock(side_effect=self.send)
         self.client._ws = self.ws
