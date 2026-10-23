@@ -31,7 +31,9 @@ class BridgeTransportTests(unittest.IsolatedAsyncioTestCase):
         websocket.close = AsyncMock()
         session.ws_connect.return_value = websocket
         client = EufySdkApiClient("bridge", 3000, session, bridge_token=TOKEN)
-        with patch("custom_components.eufy_sdk.api.asyncio.ensure_future", return_value=Mock()):
+        with patch(
+            "custom_components.eufy_sdk.api.asyncio.ensure_future", return_value=Mock()
+        ):
             await client.connect()
         self.assertTrue(client.connected)
         self.assertEqual(client.bridge_id, "fixture")
@@ -43,11 +45,15 @@ class BridgeTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_ws_rejects_legacy_protocol_even_with_valid_token(self) -> None:
         session = _session()
         websocket = Mock()
-        websocket.receive_json = AsyncMock(return_value={"event": "hello", "schemaVersion": 1})
+        websocket.receive_json = AsyncMock(
+            return_value={"event": "hello", "schemaVersion": 1}
+        )
         websocket.close = AsyncMock()
         session.ws_connect.return_value = websocket
         client = EufySdkApiClient("bridge", 3000, session, bridge_token=TOKEN)
-        with self.assertRaisesRegex(EufySdkApiClientCommunicationError, "protocol version"):
+        with self.assertRaisesRegex(
+            EufySdkApiClientCommunicationError, "protocol version"
+        ):
             await client.connect()
         websocket.close.assert_awaited_once()
         self.assertFalse(client.connected)
