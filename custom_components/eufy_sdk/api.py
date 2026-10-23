@@ -130,7 +130,12 @@ class EufySdkApiClient:
                     )
                     try:
                         hello = await ws.receive_json(timeout=5)
-                    except (ValueError, TypeError, aiohttp.ClientError, TimeoutError) as err:
+                    except (
+                        ValueError,
+                        TypeError,
+                        aiohttp.ClientError,
+                        TimeoutError,
+                    ) as err:
                         await ws.close()
                         raise EufySdkApiClientCommunicationError(
                             "bridge did not provide a valid protocol greeting"
