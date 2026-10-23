@@ -44,16 +44,16 @@ class EufySdkApiClientCommunicationError(EufySdkApiClientError):
     """The bridge could not be reached / spoke unexpectedly."""
 
 
-class EufySdkApiClientBridgeAccessError(EufySdkApiClientAuthenticationError):
-    """The bridge rejected its client token, independently of Eufy account login."""
-
-
 class EufySdkApiClientReplyTimeoutError(EufySdkApiClientCommunicationError):
     """A sent bridge request did not receive its reply before the deadline."""
 
 
 class EufySdkApiClientAuthenticationError(EufySdkApiClientError):
     """The bridge is not authenticated (needs 2FA/captcha) or rejected a command."""
+
+
+class EufySdkApiClientBridgeAccessError(EufySdkApiClientAuthenticationError):
+    """The bridge rejected its client token, independently of Eufy account login."""
 
 
 class EufySdkApiClient:
