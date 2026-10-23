@@ -20,14 +20,19 @@ class BridgeEndpointTests(unittest.TestCase):
             with self.subTest(token=type(token).__name__):
                 with self.assertRaises(ValueError):
                     BridgeEndpoint(host="bridge", port=3000, token=token)
-        for host in ("", "https://bridge", "bridge/path", "user@bridge", "bridge?x=1", "bridge\nexample"):
-            with self.subTest(host=host):
-                with self.assertRaises(ValueError):
-                    BridgeEndpoint(host=host, port=3000, token=TOKEN)
+        for host in (
+            "",
+            "https://bridge",
+            "bridge/path",
+            "user@bridge",
+            "bridge?x=1",
+            "bridge\nexample",
+        ):
+            with self.subTest(host=host), self.assertRaises(ValueError):
+                BridgeEndpoint(host=host, port=3000, token=TOKEN)
         for port in (0, 65536, -1, True):
-            with self.subTest(port=port):
-                with self.assertRaises(ValueError):
-                    BridgeEndpoint(host="bridge", port=port, token=TOKEN)
+            with self.subTest(port=port), self.assertRaises(ValueError):
+                BridgeEndpoint(host="bridge", port=port, token=TOKEN)
 
     def test_ipv6_is_bracketed_for_tls_urls(self) -> None:
         endpoint = BridgeEndpoint(host="::1", port=444, token=TOKEN)
@@ -53,6 +58,5 @@ class BridgeEndpointTests(unittest.TestCase):
             "/healthz",
             "/snapshot/%2Fetc",
         ):
-            with self.subTest(path=path):
-                with self.assertRaises(ValueError):
-                    endpoint.media_url(path)
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                endpoint.media_url(path)
