@@ -39,7 +39,9 @@ METADATA = {
 
 class DeviceIsolationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.client = EufySdkApiClient("example.invalid", 3000, Mock(), bridge_token="0" * 64)
+        self.client = EufySdkApiClient(
+            "example.invalid", 3000, Mock(), bridge_token="0" * 64
+        )
         self.devices = [
             {
                 "sn": sn,
