@@ -17,6 +17,8 @@ ATTRIBUTION = "Data provided by the eufy cloud via ha-eufy-sdk-bridge"
 # Config-entry keys: the address of the ha-eufy-sdk-bridge WebSocket.
 CONF_HOST = "host"
 CONF_PORT = "port"
+# Stored only in Home Assistant config entry data, never added to an entity or URL.
+CONF_BRIDGE_TOKEN = "bridge_token"
 DEFAULT_PORT = 3000
 
 # Config-entry key: the host-side port Home Assistant should use for go2rtc RTSP.
@@ -38,7 +40,7 @@ CONF_SOC_REFRESH = "soc_refresh_seconds"
 DEFAULT_SOC_REFRESH_SEC = 60
 
 # Schema version this integration targets (the bridge sends its own in `hello`/`ready`).
-SUPPORTED_SCHEMA = 1
+SUPPORTED_SCHEMA = 2
 
 # A HomeBase pushes `alarm` when its siren starts and when it is silenced from the app,
 # the keypad or the hub itself — but not when a triggered duration merely runs out. So a
