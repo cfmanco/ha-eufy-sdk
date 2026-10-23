@@ -24,8 +24,8 @@ from .alarm_sync import (
     end_cancelled_delay,
 )
 from .api import EufySdkApiClient
-from .bridge_access import valid_bridge_token
 from .arming_sync import apply_arming_mode_event
+from .bridge_access import valid_bridge_token
 from .const import (
     ALARM_AUTO_CLEAR_SECONDS,
     CONF_BRIDGE_TOKEN,
