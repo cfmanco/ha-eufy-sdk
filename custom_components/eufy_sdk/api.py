@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
 
+from .bridge_access import BridgeEndpoint
+from .const import SUPPORTED_SCHEMA
 from .manifest_reads import (
     normalize_properties,
     normalize_snapshot,
@@ -42,6 +44,10 @@ class EufySdkApiClientCommunicationError(EufySdkApiClientError):
     """The bridge could not be reached / spoke unexpectedly."""
 
 
+class EufySdkApiClientBridgeAccessError(EufySdkApiClientAuthenticationError):
+    """The bridge rejected its client token, independently of Eufy account login."""
+
+
 class EufySdkApiClientReplyTimeoutError(EufySdkApiClientCommunicationError):
     """A sent bridge request did not receive its reply before the deadline."""
 
@@ -60,11 +66,14 @@ class EufySdkApiClient:
         session: aiohttp.ClientSession,
         on_event: Callable[[dict[str, Any]], None] | None = None,
         on_reconnect: Callable[[], None] | None = None,
+        *,
+        bridge_token: str,
     ) -> None:
         """Store the bridge address; the connection is opened by `connect`."""
         # int() the port defensively: HA's NumberSelector yields a float, which
         # would make an invalid URL like ws://host:3012.0/ws.
-        self._url = f"ws://{host}:{int(port)}/ws"
+        self._endpoint = BridgeEndpoint(host=host, port=int(port), token=bridge_token)
+        self._url = self._endpoint.ws_url
         self._session = session
         self._on_event = on_event
         # Called after the receive loop reconnects following a drop (e.g. a bridge
@@ -114,12 +123,77 @@ class EufySdkApiClient:
                 return
             try:
                 async with asyncio.timeout(15):
-                    self._ws = await self._session.ws_connect(self._url, heartbeat=30)
+                    ws = await self._session.ws_connect(
+                        self._url,
+                        heartbeat=30,
+                        headers=self._endpoint.auth_headers(),
+                    )
+                    try:
+                        hello = await ws.receive_json(timeout=5)
+                    except (ValueError, TypeError, aiohttp.ClientError, TimeoutError) as err:
+                        await ws.close()
+                        raise EufySdkApiClientCommunicationError(
+                            "bridge did not provide a valid protocol greeting"
+                        ) from err
+                    if (
+                        not isinstance(hello, dict)
+                        or hello.get("event") != "hello"
+                        or hello.get("schemaVersion") != SUPPORTED_SCHEMA
+                    ):
+                        await ws.close()
+                        raise EufySdkApiClientCommunicationError(
+                            "bridge protocol version is incompatible"
+                        )
+            except aiohttp.WSServerHandshakeError as err:
+                if err.status in (401, 403):
+                    raise EufySdkApiClientBridgeAccessError(
+                        "bridge access token was rejected"
+                    ) from None
+                raise EufySdkApiClientCommunicationError(
+                    "secure bridge handshake failed"
+                ) from None
             except (aiohttp.ClientError, TimeoutError, OSError) as err:
-                msg = f"cannot reach the bridge at {self._url}: {err}"
-                raise EufySdkApiClientCommunicationError(msg) from err
+                raise EufySdkApiClientCommunicationError(
+                    "cannot reach bridge over a verified secure connection"
+                ) from err
+            self._ws = ws
+            bridge_id = hello.get("bridgeId")
+            if isinstance(bridge_id, str) and bridge_id:
+                self.bridge_id = bridge_id
             self._invalidate_properties()
+            self._dispatch_event(hello)
             self._recv_task = asyncio.ensure_future(self._receive_loop())
+
+    async def media_get(
+        self,
+        path: str,
+        *,
+        timeout: float = 20,  # noqa: ASYNC109 — request-specific camera timeout
+    ) -> bytes | None:
+        """Fetch one authenticated image without following redirects to other hosts."""
+        url = self._endpoint.media_url(path)
+        try:
+            async with self._session.get(
+                url,
+                headers=self._endpoint.auth_headers(),
+                timeout=aiohttp.ClientTimeout(total=timeout),
+                allow_redirects=False,
+            ) as response:
+                if response.status in (401, 403):
+                    raise EufySdkApiClientBridgeAccessError(
+                        "bridge access token was rejected"
+                    )
+                if response.status == 404:
+                    return None
+                if response.status != 200:
+                    raise EufySdkApiClientCommunicationError(
+                        "secure bridge media request failed"
+                    )
+                return await response.read()
+        except (aiohttp.ClientError, TimeoutError, OSError) as err:
+            raise EufySdkApiClientCommunicationError(
+                "secure bridge media request failed"
+            ) from err
 
     async def close(self) -> None:
         """Close the WebSocket and stop reconnecting."""
