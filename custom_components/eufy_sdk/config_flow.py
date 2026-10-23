@@ -133,6 +133,9 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self._go2rtc_rtsp_port = int(
             entry_data.get(CONF_GO2RTC_RTSP_PORT, DEFAULT_GO2RTC_RTSP_PORT)
         )
+        self._bridge_token = str(entry_data.get(CONF_BRIDGE_TOKEN, ""))
+        if not valid_bridge_token(self._bridge_token):
+            return await self.async_step_reauth_token()
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
@@ -141,18 +144,53 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Reconnect to the bridge, then route to its current auth challenge."""
         try:
-            self._client = EufySdkApiClient(
-                self._host, self._port, async_get_clientsession(self.hass)
-            )
+            self._client = self._new_client()
             await self._client.connect()
-        except EufySdkApiClientCommunicationError as err:
-            LOGGER.warning("bridge reconnect for reauth failed: %s", err)
+        except (EufySdkApiClientBridgeAccessError, ValueError):
+            return await self.async_step_reauth_token()
+        except EufySdkApiClientCommunicationError:
+            LOGGER.warning("secure bridge unavailable during Eufy reauthentication")
             return self.async_show_form(
                 step_id="reauth_confirm",
                 errors={"base": "cannot_connect"},
                 description_placeholders={"host": self._host},
             )
         return await self._continue_auth()
+
+    async def async_step_reauth_token(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Replace an invalid or missing bridge token without resetting Eufy login."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            new_token = user_input.get(CONF_BRIDGE_TOKEN)
+            if not valid_bridge_token(new_token):
+                errors["base"] = "invalid_bridge_token"
+            else:
+                self._bridge_token = new_token
+                try:
+                    self._client = self._new_client()
+                    await self._client.connect()
+                except EufySdkApiClientBridgeAccessError:
+                    errors["base"] = "invalid_bridge_token"
+                except EufySdkApiClientCommunicationError:
+                    errors["base"] = "cannot_connect"
+                else:
+                    return await self._continue_auth()
+
+        return self.async_show_form(
+            step_id="reauth_token",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_BRIDGE_TOKEN): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
+                    )
+                }
+            ),
+            errors=errors,
+        )
 
     async def async_step_user(
         self,
@@ -165,12 +203,11 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(f"{self._host}:{self._port}")
             self._abort_if_unique_id_configured()
             try:
-                self._client = EufySdkApiClient(
-                    self._host, self._port, async_get_clientsession(self.hass)
-                )
+                self._client = self._new_client()
                 await self._client.connect()
-            except EufySdkApiClientCommunicationError as err:
-                LOGGER.warning("bridge connect failed: %s", err)
+            except (EufySdkApiClientBridgeAccessError, ValueError):
+                errors["base"] = "invalid_bridge_token"
+            except EufySdkApiClientCommunicationError:
                 errors["base"] = "cannot_connect"
             else:
                 if aborted := await self._abort_if_bridge_configured():
@@ -189,6 +226,7 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Update the bridge API port or the published RTSP port."""
         entry = self._get_reconfigure_entry()
+        self._bridge_token = str(entry.data.get(CONF_BRIDGE_TOKEN, ""))
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -196,13 +234,12 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(entry.unique_id)
             self._abort_if_unique_id_mismatch()
             try:
-                self._client = EufySdkApiClient(
-                    self._host, self._port, async_get_clientsession(self.hass)
-                )
+                self._client = self._new_client()
                 await self._client.connect()
                 await self._client.close()
-            except EufySdkApiClientCommunicationError as err:
-                LOGGER.warning("bridge reconnect for reconfigure failed: %s", err)
+            except (EufySdkApiClientBridgeAccessError, ValueError):
+                errors["base"] = "invalid_bridge_token"
+            except EufySdkApiClientCommunicationError:
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_update_reload_and_abort(
@@ -211,61 +248,17 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self._bridge_schema(user_input or dict(entry.data)),
+            data_schema=self._bridge_schema(
+                user_input or dict(entry.data), token_required=False
+            ),
             errors=errors,
         )
 
     async def async_step_hassio(
-        self,
-        discovery_info: HassioServiceInfo,
+        self, discovery_info: HassioServiceInfo  # noqa: ARG002
     ) -> config_entries.ConfigFlowResult:
-        """Handle Home Assistant Supervisor add-on discovery."""
-        config = discovery_info.config
-        try:
-            self._host = str(config[CONF_HOST]).strip()
-            self._port = int(config[CONF_PORT])
-            self._go2rtc_rtsp_port = int(
-                config.get(CONF_GO2RTC_RTSP_PORT)
-                or config.get("rtsp_port")
-                or DEFAULT_GO2RTC_RTSP_PORT
-            )
-        except (KeyError, TypeError, ValueError):
-            return self.async_abort(reason="invalid_discovery_info")
-
-        if not self._host:
-            return self.async_abort(reason="invalid_discovery_info")
-
-        self.context["title_placeholders"] = {
-            "name": discovery_info.name,
-            "host": f"{self._host}:{self._port}",
-        }
-
-        # The add-on re-announces itself on every start. When this bridge already has
-        # an entry, refresh its addresses (reloading only if they changed) and drop the
-        # discovery, so it isn't offered again.
-        existing = self._find_existing_entry(discovery_info.uuid)
-        if existing is not None:
-            return self.async_update_reload_and_abort(
-                existing,
-                data_updates=self._entry_data(),
-                reason="already_configured",
-                reload_even_if_entry_is_unchanged=False,
-            )
-        await self.async_set_unique_id(discovery_info.uuid)
-        self._abort_if_unique_id_configured(updates=self._entry_data())
-
-        try:
-            self._client = EufySdkApiClient(
-                self._host, self._port, async_get_clientsession(self.hass)
-            )
-            await self._client.connect()
-        except EufySdkApiClientCommunicationError as err:
-            LOGGER.warning("discovered bridge connect failed: %s", err)
-            return self.async_abort(reason="cannot_connect")
-
-        if aborted := await self._abort_if_bridge_configured():
-            return aborted
-        return await self.async_step_hassio_confirm()
+        """Refuse unsigned discovery that cannot provision a verified TLS credential."""
+        return self.async_abort(reason="manual_secure_setup_required")
 
     async def _abort_if_bridge_configured(
         self,
@@ -340,7 +333,8 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             self._client = None
         if self.source == config_entries.SOURCE_REAUTH:
             return self.async_update_reload_and_abort(
-                self._get_reauth_entry(), data_updates={}
+                self._get_reauth_entry(),
+                data_updates={CONF_BRIDGE_TOKEN: self._bridge_token},
             )
         return self.async_create_entry(
             title=f"eufy bridge ({self._host})",
@@ -352,6 +346,7 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return {
             CONF_HOST: self._host,
             CONF_PORT: self._port,
+            CONF_BRIDGE_TOKEN: self._bridge_token,
             CONF_GO2RTC_RTSP_PORT: self._go2rtc_rtsp_port,
         }
 
