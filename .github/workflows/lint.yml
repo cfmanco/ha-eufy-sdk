@@ -5,10 +5,12 @@ on:
     branches:
       - "main"
       - "dev"
+      - "dev/security-hardening"
   pull_request:
     branches:
       - "main"
       - "dev"
+      - "dev/security-hardening"
 
 permissions: {}
 
