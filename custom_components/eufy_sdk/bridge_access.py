@@ -1,4 +1,5 @@
-"""Fail-closed bridge endpoint validation and credential handling.
+"""
+Fail-closed bridge endpoint validation and credential handling.
 
 The bridge client and image entities share this contract. It never places the
 bridge token in a URL or object representation.
@@ -60,7 +61,9 @@ class BridgeEndpoint:
         if type(self.port) is not int or not 1 <= self.port <= 65535:
             raise ValueError("bridge port must be between 1 and 65535")
         if not valid_bridge_token(self.token):
-            raise ValueError("bridge access token must be 64 lowercase hexadecimal characters")
+            raise ValueError(
+                "bridge access token must be 64 lowercase hexadecimal characters"
+            )
 
     @property
     def https_origin(self) -> str:
