@@ -12,10 +12,13 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
     EufySdkApiClient,
+    EufySdkApiClientBridgeAccessError,
     EufySdkApiClientCommunicationError,
     EufySdkApiClientError,
 )
+from .bridge_access import valid_bridge_token
 from .const import (
+    CONF_BRIDGE_TOKEN,
     CONF_GO2RTC_RTSP_PORT,
     CONF_HOST,
     CONF_POLL_INTERVAL,
@@ -51,6 +54,7 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self._client: EufySdkApiClient | None = None
         self._host: str = ""
         self._port: int = DEFAULT_PORT
+        self._bridge_token: str = ""
         self._go2rtc_rtsp_port: int = DEFAULT_GO2RTC_RTSP_PORT
 
     def _set_bridge_fields(self, data: dict[str, Any]) -> None:
@@ -58,14 +62,27 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self._host = str(data[CONF_HOST]).strip()
         # NumberSelector hands back a float (3012.0); int-ify it for URLs.
         self._port = int(data[CONF_PORT])
+        # A blank reconfigure field retains the existing credential.
+        if data.get(CONF_BRIDGE_TOKEN):
+            self._bridge_token = str(data[CONF_BRIDGE_TOKEN])
         self._go2rtc_rtsp_port = int(
             data.get(CONF_GO2RTC_RTSP_PORT, DEFAULT_GO2RTC_RTSP_PORT)
         )
 
-    def _bridge_schema(self, defaults: dict[str, Any]) -> vol.Schema:
-        """Return the shared bridge address form schema."""
-        return vol.Schema(
-            {
+    def _new_client(self) -> EufySdkApiClient:
+        """Build a TLS-only client; refuse a missing or malformed bearer token."""
+        return EufySdkApiClient(
+            self._host,
+            self._port,
+            async_get_clientsession(self.hass),
+            bridge_token=self._bridge_token,
+        )
+
+    def _bridge_schema(
+        self, defaults: dict[str, Any], *, token_required: bool = True
+    ) -> vol.Schema:
+        """Return bridge host and token fields without prefilling a secret."""
+        fields: dict[Any, Any] = {
                 vol.Required(
                     CONF_HOST,
                     default=defaults.get(CONF_HOST, vol.UNDEFINED),
@@ -89,7 +106,15 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ),
             }
+        token_key = (
+            vol.Required(CONF_BRIDGE_TOKEN)
+            if token_required
+            else vol.Optional(CONF_BRIDGE_TOKEN)
         )
+        fields[token_key] = selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+        )
+        return vol.Schema(fields)
 
     async def async_step_reauth(
         self,
