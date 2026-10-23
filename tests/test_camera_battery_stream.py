@@ -52,20 +52,19 @@ class BatteryCameraStreamTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(await _camera(BATTERY).async_create_stream())
         base.assert_not_called()
 
-    async def test_a_mains_camera_keeps_the_stream_worker(self):
+    async def test_mains_camera_does_not_start_an_unsecured_stream_worker(self):
         cam = _camera(MAINS)
-        with patch.object(Camera, "async_create_stream", AsyncMock(return_value="s")):
-            self.assertEqual(await cam.async_create_stream(), "s")
+        with patch.object(Camera, "async_create_stream", AsyncMock()) as base:
+            self.assertIsNone(await cam.async_create_stream())
+        base.assert_not_called()
 
-    async def test_without_the_power_field_the_capability_and_level_decide(self):
-        self.assertFalse(await self._starts_worker(LEGACY_BATTERY))
-        self.assertTrue(await self._starts_worker(LEGACY_MAINS))
+    async def test_unknown_power_sources_also_fail_closed(self):
+        for sn in (LEGACY_BATTERY, LEGACY_MAINS):
+            self.assertFalse(await self._starts_worker(sn))
 
-    async def test_every_camera_keeps_the_rtsp_restream(self):
-        for sn in (BATTERY, MAINS):
-            self.assertEqual(
-                await _camera(sn).stream_source(), f"rtsp://10.0.0.5:8554/{sn}"
-            )
+    async def test_no_camera_exposes_direct_rtsp_transport(self):
+        for sn in (BATTERY, MAINS, LEGACY_BATTERY, LEGACY_MAINS):
+            self.assertIsNone(await _camera(sn).stream_source())
 
 
 if __name__ == "__main__":
