@@ -21,7 +21,6 @@ from .api import (
     EufySdkApiClientCommunicationError,
 )
 from .entity import device_offline
-from .preload import async_check_preload, on_battery_power
 from .snapshot_policy import snapshot_path
 
 if TYPE_CHECKING:
@@ -82,13 +81,6 @@ class EufySdkCamera(CoordinatorEntity["EufySdkDataUpdateCoordinator"], Camera):
             manufacturer="eufy",
             model=dev.get("model") or dev.get("codec"),  # the model code, not the codec
             serial_number=sn,
-        )
-
-    async def async_added_to_hass(self) -> None:
-        """Flag stream preloading on a battery camera once the entity is registered."""
-        await super().async_added_to_hass()
-        await async_check_preload(
-            self.hass, self.entity_id, self._sn, self.coordinator.data.get(self._sn)
         )
 
     @property
