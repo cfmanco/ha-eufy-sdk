@@ -30,9 +30,7 @@ class HassioDiscoveryTests(unittest.IsolatedAsyncioTestCase):
         result = await flow.async_step_hassio(_discovery())
 
         self.assertEqual(result, "abort:manual_secure_setup_required")
-        flow.async_abort.assert_called_once_with(
-            reason="manual_secure_setup_required"
-        )
+        flow.async_abort.assert_called_once_with(reason="manual_secure_setup_required")
 
 
 class AdoptBridgeIdTests(unittest.TestCase):
