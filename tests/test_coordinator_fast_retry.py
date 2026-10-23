@@ -67,7 +67,7 @@ class FastRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.call_later.call_args.args[1], c._FAST_RETRY_S)
 
     async def test_ready_during_real_snapshot_keeps_socket_but_retries_stale_poll(self):
-        client = EufySdkApiClient("example.invalid", 3000, Mock())
+        client = EufySdkApiClient("example.invalid", 3000, Mock(), bridge_token="0" * 64)
         client._ws = Mock(closed=False)
         client.auth_status = AsyncMock(return_value={"state": "ok"})
         client.reset_connection = AsyncMock()
