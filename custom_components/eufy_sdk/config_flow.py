@@ -83,19 +83,19 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> vol.Schema:
         """Return bridge host and token fields without prefilling a secret."""
         fields: dict[Any, Any] = {
-                vol.Required(
-                    CONF_HOST,
-                    default=defaults.get(CONF_HOST, vol.UNDEFINED),
-                ): selector.TextSelector(),
-                vol.Required(
-                    CONF_PORT,
-                    default=defaults.get(CONF_PORT, DEFAULT_PORT),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=1, max=65535, mode=selector.NumberSelectorMode.BOX
-                    ),
+            vol.Required(
+                CONF_HOST,
+                default=defaults.get(CONF_HOST, vol.UNDEFINED),
+            ): selector.TextSelector(),
+            vol.Required(
+                CONF_PORT,
+                default=defaults.get(CONF_PORT, DEFAULT_PORT),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=65535, mode=selector.NumberSelectorMode.BOX
                 ),
-            }
+            ),
+        }
         token_key = (
             vol.Required(CONF_BRIDGE_TOKEN)
             if token_required
@@ -248,7 +248,8 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_hassio(
-        self, discovery_info: HassioServiceInfo  # noqa: ARG002
+        self,
+        discovery_info: HassioServiceInfo,  # noqa: ARG002
     ) -> config_entries.ConfigFlowResult:
         """Refuse unsigned discovery that cannot provision a verified TLS credential."""
         return self.async_abort(reason="manual_secure_setup_required")
