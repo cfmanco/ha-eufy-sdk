@@ -2,8 +2,8 @@
 
 import unittest
 from types import SimpleNamespace
-from typing import Any, Self
-from unittest.mock import AsyncMock, Mock, patch
+from typing import Any
+from unittest.mock import AsyncMock, Mock
 
 from custom_components.eufy_sdk.camera import EufySdkCamera
 from custom_components.eufy_sdk.const import DEFAULT_GO2RTC_RTSP_PORT
@@ -32,7 +32,7 @@ class SnapshotPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(bridge_mode_for_policy(SNAPSHOT_POLICY_DEFAULT))
         self.assertEqual(
             snapshot_url("bridge", 3000, "CAM1", None),
-            "http://bridge:3000/snapshot/CAM1",
+            "https://bridge:3000/snapshot/CAM1",
         )
 
     def test_explicit_modes_map_to_bridge_query_values(self) -> None:
@@ -41,15 +41,15 @@ class SnapshotPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bridge_mode_for_policy(SNAPSHOT_POLICY_LIVE), "live")
         self.assertEqual(
             snapshot_url("bridge", 3000, "CAM1", SNAPSHOT_POLICY_AUTO),
-            "http://bridge:3000/snapshot/CAM1?mode=auto",
+            "https://bridge:3000/snapshot/CAM1?mode=auto",
         )
         self.assertEqual(
             snapshot_url("bridge", 3000, "CAM1", SNAPSHOT_POLICY_STORED),
-            "http://bridge:3000/snapshot/CAM1?mode=stored",
+            "https://bridge:3000/snapshot/CAM1?mode=stored",
         )
         self.assertEqual(
             snapshot_url("bridge", 3000, "CAM1", SNAPSHOT_POLICY_LIVE),
-            "http://bridge:3000/snapshot/CAM1?mode=live",
+            "https://bridge:3000/snapshot/CAM1?mode=live",
         )
 
     def test_unknown_restored_value_defaults_safely(self) -> None:
@@ -124,44 +124,30 @@ class SnapshotPolicyTests(unittest.IsolatedAsyncioTestCase):
             {("eufy_sdk", "camera-stream")},
         )
 
-    async def test_camera_image_uses_per_camera_policy_and_stream_source_is_unchanged(
+    async def test_camera_image_uses_authenticated_policy_path_without_direct_rtsp(
         self,
     ) -> None:
         cases = (
-            (None, "http://bridge:3000/snapshot/camera-a"),
-            (SNAPSHOT_POLICY_DEFAULT, "http://bridge:3000/snapshot/camera-a"),
-            (SNAPSHOT_POLICY_AUTO, "http://bridge:3000/snapshot/camera-a?mode=auto"),
-            (
-                SNAPSHOT_POLICY_STORED,
-                "http://bridge:3000/snapshot/camera-a?mode=stored",
-            ),
-            (SNAPSHOT_POLICY_LIVE, "http://bridge:3000/snapshot/camera-a?mode=live"),
+            (None, "/snapshot/camera-a"),
+            (SNAPSHOT_POLICY_DEFAULT, "/snapshot/camera-a"),
+            (SNAPSHOT_POLICY_AUTO, "/snapshot/camera-a?mode=auto"),
+            (SNAPSHOT_POLICY_STORED, "/snapshot/camera-a?mode=stored"),
+            (SNAPSHOT_POLICY_LIVE, "/snapshot/camera-a?mode=live"),
         )
-        for policy, expected_url in cases:
+        for policy, expected_path in cases:
             with self.subTest(policy=policy):
                 coordinator = _coordinator({"camera-a": {"stream": "camera-a"}})
                 coordinator.config_entry.runtime_data.snapshot_policy = (
                     {} if policy is None else {"camera-a": policy}
                 )
                 camera = _CameraWithHass(
-                    coordinator,
-                    "camera-a",
-                    "bridge",
-                    3000,
-                    DEFAULT_GO2RTC_RTSP_PORT,
+                    coordinator, "camera-a", "bridge", 3000, DEFAULT_GO2RTC_RTSP_PORT
                 )
-                session = _SnapshotSession()
-
-                with patch(
-                    "custom_components.eufy_sdk.camera.async_get_clientsession",
-                    return_value=session,
-                ):
-                    self.assertEqual(await camera.async_camera_image(), b"jpeg")
-
-                self.assertEqual(session.urls, [expected_url])
-                self.assertEqual(
-                    await camera.stream_source(), "rtsp://bridge:8554/camera-a"
+                self.assertEqual(await camera.async_camera_image(), b"jpeg")
+                coordinator.config_entry.runtime_data.client.media_get.assert_awaited_once_with(
+                    expected_path, timeout=20
                 )
+                self.assertIsNone(await camera.stream_source())
 
     async def test_two_camera_selector_and_request_state_are_isolated(self) -> None:
         coordinator = _coordinator(
@@ -176,39 +162,25 @@ class SnapshotPolicyTests(unittest.IsolatedAsyncioTestCase):
         select_b.async_write_ha_state = Mock()
         await select_a.async_select_option(SNAPSHOT_POLICY_STORED)
         await select_b.async_select_option(SNAPSHOT_POLICY_LIVE)
-        session = _SnapshotSession()
         camera_a = _CameraWithHass(
-            coordinator,
-            "camera-a",
-            "bridge",
-            3000,
-            DEFAULT_GO2RTC_RTSP_PORT,
+            coordinator, "camera-a", "bridge", 3000, DEFAULT_GO2RTC_RTSP_PORT
         )
         camera_b = _CameraWithHass(
-            coordinator,
-            "camera-b",
-            "bridge",
-            3000,
-            DEFAULT_GO2RTC_RTSP_PORT,
+            coordinator, "camera-b", "bridge", 3000, DEFAULT_GO2RTC_RTSP_PORT
         )
-
-        with patch(
-            "custom_components.eufy_sdk.camera.async_get_clientsession",
-            return_value=session,
-        ):
-            await camera_a.async_camera_image()
-            await camera_b.async_camera_image()
-            await select_a.async_select_option(SNAPSHOT_POLICY_DEFAULT)
-            await camera_a.async_camera_image()
-            await camera_b.async_camera_image()
-
+        await camera_a.async_camera_image()
+        await camera_b.async_camera_image()
+        await select_a.async_select_option(SNAPSHOT_POLICY_DEFAULT)
+        await camera_a.async_camera_image()
+        await camera_b.async_camera_image()
+        calls = coordinator.config_entry.runtime_data.client.media_get.await_args_list
         self.assertEqual(
-            session.urls,
+            [entry.args[0] for entry in calls],
             [
-                "http://bridge:3000/snapshot/camera-a?mode=stored",
-                "http://bridge:3000/snapshot/camera-b?mode=live",
-                "http://bridge:3000/snapshot/camera-a",
-                "http://bridge:3000/snapshot/camera-b?mode=live",
+                "/snapshot/camera-a?mode=stored",
+                "/snapshot/camera-b?mode=live",
+                "/snapshot/camera-a",
+                "/snapshot/camera-b?mode=live",
             ],
         )
         self.assertEqual(
@@ -222,7 +194,7 @@ def _coordinator(devices: dict[str, dict[str, Any]]) -> SimpleNamespace:
     runtime_data = SimpleNamespace(
         snapshot_policy={},
         properties={sn: [] for sn in devices},
-        client=Mock(),
+        client=Mock(media_get=AsyncMock(return_value=b"jpeg")),
     )
     entry = SimpleNamespace(runtime_data=runtime_data)
     coordinator = SimpleNamespace(
@@ -240,29 +212,6 @@ class _CameraWithHass(EufySdkCamera):
     @property
     def hass(self) -> Any:
         return object()
-
-
-class _SnapshotResponse:
-    status = 200
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(self, *_args: object) -> None:
-        return None
-
-    async def read(self) -> bytes:
-        return b"jpeg"
-
-
-class _SnapshotSession:
-    def __init__(self) -> None:
-        self.urls: list[str] = []
-
-    def get(self, url: str, *, timeout: int) -> _SnapshotResponse:
-        del timeout
-        self.urls.append(url)
-        return _SnapshotResponse()
 
 
 if __name__ == "__main__":
