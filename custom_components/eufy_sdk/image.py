@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-import aiohttp
 from homeassistant.components.image import ImageEntity
 from homeassistant.core import callback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
+from .api import (
+    EufySdkApiClientBridgeAccessError,
+    EufySdkApiClientCommunicationError,
+)
 from .const import CONF_HOST, CONF_PORT, EVENT_TYPE
 from .entity import EufySdkDeviceEntity
 from .pushmap import EVENT_IMAGE_REFRESH, THUMBNAIL_EVENTS
@@ -63,14 +64,14 @@ class EufySdkEventImage(EufySdkDeviceEntity, ImageEntity):
         hass: HomeAssistant,
         coordinator: EufySdkDataUpdateCoordinator,
         sn: str,
-        host: str,
-        port: int,
+        host: str,  # noqa: ARG002 — retained for existing constructor calls
+        port: int,  # noqa: ARG002 — retained for existing constructor calls
     ) -> None:
         """Bind to a device serial + the bridge address."""
         EufySdkDeviceEntity.__init__(self, coordinator, sn)
         ImageEntity.__init__(self, hass)
         self._attr_unique_id = f"{sn}_last_event"
-        self._url = f"http://{host}:{port}/event-image/{sn}"
+        self._path = f"/event-image/{sn}"
         self._image: bytes | None = None
         self._hash: str | None = None
         # A detection push and the eventImageUpdated nudge both trigger a refresh.
@@ -131,14 +132,13 @@ class EufySdkEventImage(EufySdkDeviceEntity, ImageEntity):
             self.async_write_ha_state()
 
     async def _fetch(self) -> bytes | None:
-        """GET the retained thumbnail bytes from the bridge, or None if unavailable."""
-        session = async_get_clientsession(self.hass)
+        """Retrieve retained JPEG bytes through the authenticated HTTPS media client."""
+        client = self.coordinator.config_entry.runtime_data.client
         try:
-            resp = await session.get(self._url, timeout=aiohttp.ClientTimeout(total=15))
-            if resp.status != HTTPStatus.OK:
-                return None
-            return await resp.read()
-        except (aiohttp.ClientError, TimeoutError):
+            return await client.media_get(self._path, timeout=15)
+        except EufySdkApiClientBridgeAccessError:
+            raise
+        except EufySdkApiClientCommunicationError:
             return None
 
     async def async_image(self) -> bytes | None:
