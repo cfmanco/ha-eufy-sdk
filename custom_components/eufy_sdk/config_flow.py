@@ -66,7 +66,7 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if data.get(CONF_BRIDGE_TOKEN):
             self._bridge_token = str(data[CONF_BRIDGE_TOKEN])
         self._go2rtc_rtsp_port = int(
-            data.get(CONF_GO2RTC_RTSP_PORT, DEFAULT_GO2RTC_RTSP_PORT)
+            data.get(CONF_GO2RTC_RTSP_PORT, self._go2rtc_rtsp_port)
         )
 
     def _new_client(self) -> EufySdkApiClient:
@@ -90,16 +90,6 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_PORT,
                     default=defaults.get(CONF_PORT, DEFAULT_PORT),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=1, max=65535, mode=selector.NumberSelectorMode.BOX
-                    ),
-                ),
-                vol.Required(
-                    CONF_GO2RTC_RTSP_PORT,
-                    default=defaults.get(
-                        CONF_GO2RTC_RTSP_PORT, DEFAULT_GO2RTC_RTSP_PORT
-                    ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=1, max=65535, mode=selector.NumberSelectorMode.BOX
@@ -227,6 +217,9 @@ class EufySdkFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Update the bridge API port or the published RTSP port."""
         entry = self._get_reconfigure_entry()
         self._bridge_token = str(entry.data.get(CONF_BRIDGE_TOKEN, ""))
+        self._go2rtc_rtsp_port = int(
+            entry.data.get(CONF_GO2RTC_RTSP_PORT, DEFAULT_GO2RTC_RTSP_PORT)
+        )
         errors: dict[str, str] = {}
 
         if user_input is not None:
