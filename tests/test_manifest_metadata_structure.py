@@ -43,7 +43,7 @@ DEVICE = {
 
 class MetadataClientTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.client = EufySdkApiClient("example.invalid", 3000, Mock())
+        self.client = EufySdkApiClient("example.invalid", 3000, Mock(), bridge_token="0" * 64)
         self.device = deepcopy(DEVICE)
         self.metadata = deepcopy(METADATA)
         self.metadata_calls = 0
