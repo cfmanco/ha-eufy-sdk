@@ -33,8 +33,8 @@ flowchart LR
     TLS --> BRIDGE
     BRIDGE --> SESSION
   end
-  CLIENT <-->|"WSS and HTTPS with bearer header"| TLS
-  BRIDGE <-->|"Cloud and P2P"| CLOUD["Eufy service"]
+  CLIENT <-->|WSS and HTTPS bearer header| TLS
+  BRIDGE <-->|Cloud and P2P| CLOUD["Eufy service"]
 ```
 
 Host loopback cannot be reached directly from the separate Home Assistant appliance. Deploy a restricted TLS gateway with a trusted certificate and DNS name. The gateway must forward the `Authorization` header to the bridge, must not log it, and must restrict client access. The bridge's unauthenticated health endpoint is for liveness only. The bridge remains inaccessible directly from other network segments.
