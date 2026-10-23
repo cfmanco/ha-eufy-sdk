@@ -266,7 +266,7 @@ class DecodedSecondsTests(unittest.IsolatedAsyncioTestCase):
         device["decodedState"] = {"motion": {"snoozeTime": 3600}}
         added, coordinator, _ = await self._setup_numbers(metadata, device)
         self.assertEqual(len(added), 1)
-        client = EufySdkApiClient("example.invalid", 3000, Mock())
+        client = EufySdkApiClient("example.invalid", 3000, Mock(), bridge_token="0" * 64)
         client.rpc = AsyncMock(return_value={"ok": True})
         coordinator.config_entry.runtime_data.client = client
         entity = added[0]
@@ -437,7 +437,7 @@ class DecodedSecondsTests(unittest.IsolatedAsyncioTestCase):
 
 class MetadataCacheTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.client = EufySdkApiClient("example.invalid", 3000, Mock())
+        self.client = EufySdkApiClient("example.invalid", 3000, Mock(), bridge_token="0" * 64)
         self.device = deepcopy(DEVICE)
         self.metadata_calls = 0
         self.fail_metadata = False
