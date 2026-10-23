@@ -1,5 +1,15 @@
 # ha-eufy-sdk
 
+> **Security development branch — not deployable yet.** This fork is being adapted for the
+> hardened bridge's protocol schema 2, including authenticated WebSocket control, HTTPS still images,
+> credential-aware reauthentication and separately secured video. The current integration code has
+> **not yet been migrated**; it cannot connect to the hardened bridge as-is.
+> Read the [architecture](docs/security-architecture.md) and
+> [implementation plan](docs/security-implementation-plan.md) before changing integration code.
+>
+> The general feature descriptions below apply to the upstream integration, not to a verified
+> hardened deployment.
+
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://hacs.xyz)
 [![Validate](https://github.com/mega-yfue/ha-eufy-sdk/actions/workflows/validate.yml/badge.svg)](https://github.com/mega-yfue/ha-eufy-sdk/actions/workflows/validate.yml)
 [![Lint](https://github.com/mega-yfue/ha-eufy-sdk/actions/workflows/lint.yml/badge.svg)](https://github.com/mega-yfue/ha-eufy-sdk/actions/workflows/lint.yml)
