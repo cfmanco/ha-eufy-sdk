@@ -26,8 +26,13 @@ def bridge_mode_for_policy(policy: str | None) -> str | None:
     return None if normalized == SNAPSHOT_POLICY_DEFAULT else normalized
 
 
-def snapshot_url(host: str, port: int, sn: str, policy: str | None) -> str:
-    """Build a snapshot URL, omitting the mode for configured bridge behavior."""
-    url = f"http://{host}:{port}/snapshot/{sn}"
+def snapshot_path(sn: str, policy: str | None) -> str:
+    """Build a relative image route for the authenticated media client."""
+    path = f"/snapshot/{sn}"
     mode = bridge_mode_for_policy(policy)
-    return f"{url}?mode={mode}" if mode else url
+    return f"{path}?mode={mode}" if mode else path
+
+
+def snapshot_url(host: str, port: int, sn: str, policy: str | None) -> str:
+    """Return a TLS URL for callers that only need a displayable media address."""
+    return f"https://{host}:{port}{snapshot_path(sn, policy)}"
