@@ -97,11 +97,11 @@
     "step": {
       "user": {
         "title": "Connect to the eufy bridge",
-        "description": "Enter the host and port of your ha-eufy-sdk bridge. The RTSP port is the published host port for go2rtc.",
+        "description": "Enter the TLS gateway hostname, HTTPS port and bridge access token. Live video is disabled until a secure media gateway is available.",
         "data": {
           "host": "Host",
           "port": "Port",
-          "go2rtc_rtsp_port": "RTSP port"
+          "bridge_token": "Bridge access token (64 hexadecimal characters)"
         }
       },
       "hassio_confirm": {
@@ -110,11 +110,11 @@
       },
       "reconfigure": {
         "title": "Reconfigure the eufy bridge",
-        "description": "Update the bridge host/port or the published go2rtc RTSP port.",
+        "description": "Update the TLS gateway hostname or port. Leave the replacement token blank to retain the existing token.",
         "data": {
           "host": "Host",
           "port": "Port",
-          "go2rtc_rtsp_port": "RTSP port"
+          "bridge_token": "Replacement bridge token (optional)"
         }
       },
       "twofa": {
@@ -136,18 +136,27 @@
       "reauth_confirm": {
         "title": "Re-authenticate the eufy bridge",
         "description": "The bridge at {host} needs to log in again (its session expired, so eufy is asking for 2FA/captcha). Make sure the bridge is running and reachable, then submit to continue."
+      },
+      "reauth_token": {
+        "title": "Update bridge access token",
+        "description": "The bridge rejected or is missing its access credential. Enter the new 64-character token. This is separate from your Eufy account login.",
+        "data": {
+          "bridge_token": "New bridge access token"
+        }
       }
     },
     "error": {
       "cannot_connect": "Could not reach the bridge at that host/port.",
       "invalid_2fa": "That verification code was not accepted.",
-      "invalid_captcha": "That captcha was not accepted."
+      "invalid_captcha": "That captcha was not accepted.",
+      "invalid_bridge_token": "The bridge access token is missing, invalid or rejected."
     },
     "abort": {
       "already_configured": "This bridge is already configured.",
       "cannot_connect": "Could not reach the bridge.",
       "invalid_discovery_info": "The eufy bridge add-on sent incomplete discovery information.",
-      "reauth_successful": "The bridge is authenticated again."
+      "reauth_successful": "The bridge is authenticated again.",
+      "manual_secure_setup_required": "Secure bridge setup must be completed manually with a verified TLS endpoint and access token."
     }
   },
   "options": {
