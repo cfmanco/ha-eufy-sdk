@@ -1,3 +1,4 @@
+# ruff: noqa: INP001, S101 - standalone pytest module; assertions are test-only
 """Behavioural tests for the secure bridge transport endpoint."""
 
 import pytest
