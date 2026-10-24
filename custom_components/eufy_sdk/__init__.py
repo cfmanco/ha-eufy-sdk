@@ -237,9 +237,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> b
         LOGGER.warning("could not set bridge poll interval: %s", err)
 
     # A single bad device cannot block platform setup.
-    entry.runtime_data.properties = await _load_property_manifests(
-        coordinator, client
-    )
+    entry.runtime_data.properties = await _load_property_manifests(coordinator, client)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
