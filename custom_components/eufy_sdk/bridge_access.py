@@ -23,7 +23,9 @@ _MAX_TCP_PORT = 65535
 _INVALID_HOST = "bridge host must be a DNS name or IP address"
 _INVALID_IPV6 = "invalid bridge IPv6 address"
 _INVALID_PORT = "bridge port must be between 1 and 65535"
-_INVALID_CREDENTIAL_FORMAT = "bridge access token must be 64 lowercase hexadecimal characters"
+_INVALID_CREDENTIAL_FORMAT = (
+    "bridge access token must be 64 lowercase hexadecimal characters"
+)
 _INVALID_MEDIA_PATH = "invalid bridge media path"
 
 
