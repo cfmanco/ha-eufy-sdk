@@ -37,7 +37,7 @@ class SetupEventTests(unittest.IsolatedAsyncioTestCase):
         callbacks = []
 
         def make_client(**kwargs: Any) -> Mock:
-            callbacks.append(kwargs["on_event"])
+            callbacks.append(kwargs["callbacks"].on_event)
             return client
 
         with (
@@ -83,7 +83,7 @@ class SetupEventTests(unittest.IsolatedAsyncioTestCase):
         callbacks = []
 
         def make_client(**kwargs: Any) -> Mock:
-            callbacks.append(kwargs["on_event"])
+            callbacks.append(kwargs["callbacks"].on_event)
             return client
 
         with (
