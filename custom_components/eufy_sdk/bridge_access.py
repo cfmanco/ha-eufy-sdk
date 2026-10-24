@@ -18,6 +18,14 @@ _MEDIA_PATTERN = re.compile(
     r"(?:\?mode=(?:auto|stored|live))?\Z"
 )
 
+_MAX_DNS_HOST_LENGTH = 253
+_MAX_TCP_PORT = 65535
+_INVALID_HOST = "bridge host must be a DNS name or IP address"
+_INVALID_IPV6 = "invalid bridge IPv6 address"
+_INVALID_PORT = "bridge port must be between 1 and 65535"
+_INVALID_TOKEN = "bridge access token must be 64 lowercase hexadecimal characters"
+_INVALID_MEDIA_PATH = "invalid bridge media path"
+
 
 def valid_bridge_token(token: object) -> bool:
     """Return whether the provided value is a canonical 256-bit bridge secret."""
@@ -27,24 +35,24 @@ def valid_bridge_token(token: object) -> bool:
 def _host_authority(host: str) -> str:
     """Validate a DNS name or IP literal without accepting a URL or userinfo."""
     if not isinstance(host, str) or not host or host != host.strip():
-        raise ValueError("bridge host must be a DNS name or IP address")
+        raise ValueError(_INVALID_HOST)
 
     if host.startswith("[") and host.endswith("]"):
         try:
             return f"[{ipaddress.IPv6Address(host[1:-1])}]"
         except ipaddress.AddressValueError as err:
-            raise ValueError("invalid bridge IPv6 address") from err
+            raise ValueError(_INVALID_IPV6) from err
 
     if ":" in host:
         try:
             return f"[{ipaddress.IPv6Address(host)}]"
         except ipaddress.AddressValueError as err:
-            raise ValueError("invalid bridge IPv6 address") from err
+            raise ValueError(_INVALID_IPV6) from err
 
-    if len(host) > 253 or any(
+    if len(host) > _MAX_DNS_HOST_LENGTH or any(
         _LABEL_PATTERN.fullmatch(label) is None for label in host.split(".")
     ):
-        raise ValueError("bridge host must be a DNS name or IP address")
+        raise ValueError(_INVALID_HOST)
     return host
 
 
@@ -57,13 +65,12 @@ class BridgeEndpoint:
     token: str = field(repr=False)
 
     def __post_init__(self) -> None:
+        """Validate the configured endpoint without disclosing credential contents."""
         _host_authority(self.host)
-        if type(self.port) is not int or not 1 <= self.port <= 65535:
-            raise ValueError("bridge port must be between 1 and 65535")
+        if type(self.port) is not int or not 1 <= self.port <= _MAX_TCP_PORT:
+            raise ValueError(_INVALID_PORT)
         if not valid_bridge_token(self.token):
-            raise ValueError(
-                "bridge access token must be 64 lowercase hexadecimal characters"
-            )
+            raise ValueError(_INVALID_TOKEN)
 
     @property
     def https_origin(self) -> str:
@@ -82,5 +89,5 @@ class BridgeEndpoint:
     def media_url(self, path: str) -> str:
         """Allow only a single camera-media route at our own HTTPS origin."""
         if not isinstance(path, str) or _MEDIA_PATTERN.fullmatch(path) is None:
-            raise ValueError("invalid bridge media path")
+            raise ValueError(_INVALID_MEDIA_PATH)
         return self.https_origin + path
