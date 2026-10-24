@@ -18,7 +18,7 @@ ATTRIBUTION = "Data provided by the eufy cloud via ha-eufy-sdk-bridge"
 CONF_HOST = "host"
 CONF_PORT = "port"
 # Stored only in Home Assistant config entry data, never added to an entity or URL.
-CONF_BRIDGE_TOKEN = "bridge_token"
+CONF_BRIDGE_TOKEN = "bridge_token"  # noqa: S105 - name of a config-entry field, not a password value
 DEFAULT_PORT = 3000
 
 # Config-entry key: the host-side port Home Assistant should use for go2rtc RTSP.
