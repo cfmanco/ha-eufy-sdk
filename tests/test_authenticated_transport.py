@@ -2,6 +2,8 @@
 """Security tests for the shared authenticated bridge transport."""
 
 import unittest
+from collections.abc import Coroutine
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
@@ -24,6 +26,12 @@ def _session() -> Mock:
     return session
 
 
+def _close_unscheduled_receive_task(coroutine: Coroutine[Any, Any, None]) -> Mock:
+    """Dispose of the mock client's background coroutine rather than leaking it."""
+    coroutine.close()
+    return Mock()
+
+
 class BridgeTransportTests(unittest.IsolatedAsyncioTestCase):
     """Verify authenticated bridge interactions without contacting a real host."""
 
@@ -39,7 +47,8 @@ class BridgeTransportTests(unittest.IsolatedAsyncioTestCase):
         session.ws_connect.return_value = websocket
         client = EufySdkApiClient("bridge", 3000, session, bridge_token=TOKEN)
         with patch(
-            "custom_components.eufy_sdk.api.asyncio.ensure_future", return_value=Mock()
+            "custom_components.eufy_sdk.api.asyncio.ensure_future",
+            side_effect=_close_unscheduled_receive_task,
         ):
             await client.connect()
         assert client.connected
