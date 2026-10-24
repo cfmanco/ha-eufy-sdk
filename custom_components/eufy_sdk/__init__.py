@@ -23,7 +23,7 @@ from .alarm_sync import (
     clear_alarm,
     end_cancelled_delay,
 )
-from .api import EufySdkApiClient
+from .api import BridgeClientCallbacks, EufySdkApiClient
 from .arming_sync import apply_arming_mode_event
 from .bridge_access import valid_bridge_token
 from .const import (
@@ -130,10 +130,26 @@ def _apply_property_changed(
     )
 
 
+async def _load_property_manifests(
+    coordinator: EufySdkDataUpdateCoordinator, client: EufySdkApiClient
+) -> dict[str, list]:
+    """Load each working device's property manifest without aborting other devices."""
+    properties: dict[str, list] = {}
+    for serial, device in coordinator.data.items():
+        if device.get("error"):
+            continue
+        try:
+            properties[serial] = await client.get_properties(serial)
+        except Exception as err:  # noqa: BLE001 - a single device must not block setup
+            LOGGER.warning("could not fetch properties for %s: %s", serial, err)
+    return properties
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> bool:
     """Set up eufy_sdk from a config entry."""
     if not valid_bridge_token(entry.data.get(CONF_BRIDGE_TOKEN)):
-        raise ConfigEntryAuthFailed("bridge access token configuration is required")
+        msg = "bridge access token configuration is required"
+        raise ConfigEntryAuthFailed(msg)
     poll_min = entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL_MIN)
     coordinator = EufySdkDataUpdateCoordinator(
         hass=hass,
@@ -203,8 +219,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> b
         port=entry.data[CONF_PORT],
         session=async_get_clientsession(hass),
         bridge_token=entry.data[CONF_BRIDGE_TOKEN],
-        on_event=_on_event,
-        on_reconnect=_refresh_now,
+        callbacks=BridgeClientCallbacks(on_event=_on_event, on_reconnect=_refresh_now),
     )
     entry.runtime_data = EufySdkData(
         client=client,
@@ -221,17 +236,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> b
     except Exception as err:  # noqa: BLE001 - a failed config push shouldn't block setup
         LOGGER.warning("could not set bridge poll interval: %s", err)
 
-    # Property manifests are static per device — fetch once so the platforms can
-    # build switch/select/number/sensor entities. A device that fails is skipped.
-    properties: dict[str, list] = {}
-    for sn, dev in coordinator.data.items():
-        if dev.get("error"):
-            continue
-        try:
-            properties[sn] = await client.get_properties(sn)
-        except Exception as err:  # noqa: BLE001 - one bad device must not abort setup
-            LOGGER.warning("could not fetch properties for %s: %s", sn, err)
-    entry.runtime_data.properties = properties
+    # A single bad device cannot block platform setup.
+    entry.runtime_data.properties = await _load_property_manifests(
+        coordinator, client
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
