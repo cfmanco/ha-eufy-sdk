@@ -26,7 +26,14 @@ def test_invalid_tokens_fail_closed(token: object) -> None:
 
 @pytest.mark.parametrize(
     "host",
-    ["", "https://bridge", "bridge/path", "user@bridge", "bridge?x=1", "bridge\nexample"],
+    [
+        "",
+        "https://bridge",
+        "bridge/path",
+        "user@bridge",
+        "bridge?x=1",
+        "bridge\nexample",
+    ],
 )
 def test_invalid_hosts_are_rejected(host: str) -> None:
     """Untrusted user info and URL fragments cannot override the TLS origin."""
