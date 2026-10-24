@@ -36,12 +36,7 @@ def valid_bridge_token(token: object) -> bool:
 
 def _host_authority(host: str) -> str:
     """Validate a DNS name or IP literal without accepting a URL or userinfo."""
-    if (
-        not isinstance(host, str)
-        or not host
-        or host != host.strip()
-        or "://" in host
-    ):
+    if not isinstance(host, str) or not host or host != host.strip() or "://" in host:
         raise ValueError(_INVALID_HOST)
 
     if host.startswith("[") and host.endswith("]"):
