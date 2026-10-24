@@ -45,12 +45,3 @@ jobs:
 
       - name: Format
         run: python3 -m ruff format . --check
-
-      # Development-only: capture the formatter patch for connector-mediated updates.
-      - name: Diagnostic Ruff autoformat
-        if: failure()
-        run: |
-          python3 -m ruff check --fix . || true
-          python3 -m ruff format .
-          git --no-pager diff -- custom_components/eufy_sdk tests
-          python3 -m ruff check . || true
