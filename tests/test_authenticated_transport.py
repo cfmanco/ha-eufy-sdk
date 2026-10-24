@@ -1,3 +1,4 @@
+# ruff: noqa: INP001, S101 - assertions are intentional in the test-only module
 """Security tests for the shared authenticated bridge transport."""
 
 import unittest
@@ -13,6 +14,7 @@ from custom_components.eufy_sdk.api import (
 )
 
 TOKEN = "0123456789abcdef" * 4
+EXPECTED_HEARTBEAT = 30
 
 
 def _session() -> Mock:
@@ -45,7 +47,7 @@ class BridgeTransportTests(unittest.IsolatedAsyncioTestCase):
         args = session.ws_connect.call_args
         assert args.args[0] == "wss://bridge:3000/ws"
         assert args.kwargs["headers"] == {"Authorization": f"Bearer {TOKEN}"}
-        assert args.kwargs["heartbeat"] == 30
+        assert args.kwargs["heartbeat"] == EXPECTED_HEARTBEAT
 
     async def test_ws_rejects_legacy_protocol_even_with_valid_token(self) -> None:
         """An old schema cannot create an authenticated control session."""
@@ -57,7 +59,9 @@ class BridgeTransportTests(unittest.IsolatedAsyncioTestCase):
         websocket.close = AsyncMock()
         session.ws_connect.return_value = websocket
         client = EufySdkApiClient("bridge", 3000, session, bridge_token=TOKEN)
-        with pytest.raises(EufySdkApiClientCommunicationError, match="protocol version"):
+        with pytest.raises(
+            EufySdkApiClientCommunicationError, match="protocol version"
+        ):
             await client.connect()
         websocket.close.assert_awaited_once()
         assert not client.connected
