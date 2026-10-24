@@ -162,21 +162,13 @@ class EufySdkApiClient:
                         or hello.get("schemaVersion") != SUPPORTED_SCHEMA
                     ):
                         await ws.close()
-                        raise EufySdkApiClientCommunicationError(
-                            _INCOMPATIBLE_PROTOCOL
-                        )
+                        raise EufySdkApiClientCommunicationError(_INCOMPATIBLE_PROTOCOL)
             except aiohttp.WSServerHandshakeError as err:
                 if err.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
-                    raise EufySdkApiClientBridgeAccessError(
-                        _ACCESS_REJECTED
-                    ) from None
-                raise EufySdkApiClientCommunicationError(
-                    _HANDSHAKE_FAILURE
-                ) from None
+                    raise EufySdkApiClientBridgeAccessError(_ACCESS_REJECTED) from None
+                raise EufySdkApiClientCommunicationError(_HANDSHAKE_FAILURE) from None
             except (aiohttp.ClientError, TimeoutError, OSError) as err:
-                raise EufySdkApiClientCommunicationError(
-                    _CONNECTION_FAILURE
-                ) from err
+                raise EufySdkApiClientCommunicationError(_CONNECTION_FAILURE) from err
             self._ws = ws
             bridge_id = hello.get("bridgeId")
             if isinstance(bridge_id, str) and bridge_id:
@@ -201,20 +193,14 @@ class EufySdkApiClient:
                 allow_redirects=False,
             ) as response:
                 if response.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
-                    raise EufySdkApiClientBridgeAccessError(
-                        _ACCESS_REJECTED
-                    )
+                    raise EufySdkApiClientBridgeAccessError(_ACCESS_REJECTED)
                 if response.status == HTTPStatus.NOT_FOUND:
                     return None
                 if response.status != HTTPStatus.OK:
-                    raise EufySdkApiClientCommunicationError(
-                        _MEDIA_FAILURE
-                    )
+                    raise EufySdkApiClientCommunicationError(_MEDIA_FAILURE)
                 return await response.read()
         except (aiohttp.ClientError, TimeoutError, OSError) as err:
-            raise EufySdkApiClientCommunicationError(
-                _MEDIA_FAILURE
-            ) from err
+            raise EufySdkApiClientCommunicationError(_MEDIA_FAILURE) from err
 
     async def close(self) -> None:
         """Close the WebSocket and stop reconnecting."""
