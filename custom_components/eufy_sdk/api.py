@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from dataclasses import dataclass
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -29,6 +31,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 _LOGGER = logging.getLogger(__name__)
+
+_INVALID_GREETING = "bridge did not provide a valid protocol greeting"
+_INCOMPATIBLE_PROTOCOL = "bridge protocol version is incompatible"
+_ACCESS_REJECTED = "bridge access token was rejected"
+_HANDSHAKE_FAILURE = "secure bridge handshake failed"
+_CONNECTION_FAILURE = "cannot reach bridge over a verified secure connection"
+_MEDIA_FAILURE = "secure bridge media request failed"
 
 
 class EufySdkApiClientError(HomeAssistantError):
@@ -56,6 +65,14 @@ class EufySdkApiClientBridgeAccessError(EufySdkApiClientAuthenticationError):
     """The bridge rejected its client token, independently of Eufy account login."""
 
 
+@dataclass(frozen=True, slots=True)
+class BridgeClientCallbacks:
+    """Event and reconnect hooks owned by an integration runtime."""
+
+    on_event: Callable[[dict[str, Any]], None] | None = None
+    on_reconnect: Callable[[], None] | None = None
+
+
 class EufySdkApiClient:
     """A connection to one ha-eufy-sdk bridge."""
 
@@ -64,10 +81,9 @@ class EufySdkApiClient:
         host: str,
         port: int,
         session: aiohttp.ClientSession,
-        on_event: Callable[[dict[str, Any]], None] | None = None,
-        on_reconnect: Callable[[], None] | None = None,
         *,
         bridge_token: str,
+        callbacks: BridgeClientCallbacks | None = None,
     ) -> None:
         """Store the bridge address; the connection is opened by `connect`."""
         # int() the port defensively: HA's NumberSelector yields a float, which
@@ -75,11 +91,11 @@ class EufySdkApiClient:
         self._endpoint = BridgeEndpoint(host=host, port=int(port), token=bridge_token)
         self._url = self._endpoint.ws_url
         self._session = session
-        self._on_event = on_event
+        self._on_event = callbacks.on_event if callbacks else None
         # Called after the receive loop reconnects following a drop (e.g. a bridge
         # restart), so the coordinator can refresh at once instead of leaving entities
         # unavailable until the next poll.
-        self._on_reconnect = on_reconnect
+        self._on_reconnect = callbacks.on_reconnect if callbacks else None
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._recv_task: asyncio.Task | None = None
         self._reconnect_task: asyncio.Task | None = None
@@ -138,7 +154,7 @@ class EufySdkApiClient:
                     ) as err:
                         await ws.close()
                         raise EufySdkApiClientCommunicationError(
-                            "bridge did not provide a valid protocol greeting"
+                            _INVALID_GREETING
                         ) from err
                     if (
                         not isinstance(hello, dict)
@@ -147,19 +163,19 @@ class EufySdkApiClient:
                     ):
                         await ws.close()
                         raise EufySdkApiClientCommunicationError(
-                            "bridge protocol version is incompatible"
+                            _INCOMPATIBLE_PROTOCOL
                         )
             except aiohttp.WSServerHandshakeError as err:
-                if err.status in (401, 403):
+                if err.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                     raise EufySdkApiClientBridgeAccessError(
-                        "bridge access token was rejected"
+                        _ACCESS_REJECTED
                     ) from None
                 raise EufySdkApiClientCommunicationError(
-                    "secure bridge handshake failed"
+                    _HANDSHAKE_FAILURE
                 ) from None
             except (aiohttp.ClientError, TimeoutError, OSError) as err:
                 raise EufySdkApiClientCommunicationError(
-                    "cannot reach bridge over a verified secure connection"
+                    _CONNECTION_FAILURE
                 ) from err
             self._ws = ws
             bridge_id = hello.get("bridgeId")
@@ -184,20 +200,20 @@ class EufySdkApiClient:
                 timeout=aiohttp.ClientTimeout(total=timeout),
                 allow_redirects=False,
             ) as response:
-                if response.status in (401, 403):
+                if response.status in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                     raise EufySdkApiClientBridgeAccessError(
-                        "bridge access token was rejected"
+                        _ACCESS_REJECTED
                     )
-                if response.status == 404:
+                if response.status == HTTPStatus.NOT_FOUND:
                     return None
-                if response.status != 200:
+                if response.status != HTTPStatus.OK:
                     raise EufySdkApiClientCommunicationError(
-                        "secure bridge media request failed"
+                        _MEDIA_FAILURE
                     )
                 return await response.read()
         except (aiohttp.ClientError, TimeoutError, OSError) as err:
             raise EufySdkApiClientCommunicationError(
-                "secure bridge media request failed"
+                _MEDIA_FAILURE
             ) from err
 
     async def close(self) -> None:
